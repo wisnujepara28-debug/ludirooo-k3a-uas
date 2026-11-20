@@ -1,27 +1,44 @@
 import React, { useState } from 'react';
-import { ArrowRight, Building2, CheckCircle2, ShieldCheck, Smartphone } from 'lucide-react';
+import { ArrowRight, Building2, Check, CheckCircle2, Copy, ExternalLink, ShieldCheck, Smartphone } from 'lucide-react';
 import type { AppWorkspace } from '../types/hrm';
 import { formatDateDDMMMYYYY } from '../utils/formatters';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface LoginViewProps {
-  onGoogleLogin: (targetWorkspace: AppWorkspace) => Promise<void>;
+  onGoogleLogin: (targetWorkspace: AppWorkspace, useRedirect?: boolean) => Promise<void>;
   authError: string;
+  showRedirectFallback: boolean;
   isSigningIn: boolean;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onGoogleLogin,
   authError,
+  showRedirectFallback,
   isSigningIn,
 }) => {
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [signingTarget, setSigningTarget] = useState<AppWorkspace | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
-  const handleLoginClick = async (target: AppWorkspace) => {
+  const handleLoginClick = async (target: AppWorkspace, useRedirect = false) => {
     setSigningTarget(target);
-    await onGoogleLogin(target);
+    await onGoogleLogin(target, useRedirect);
     setSigningTarget(null);
+  };
+
+  const isUnauthorizedDomain = authError.includes('Authorized Domains');
+  const currentHostname = typeof window !== 'undefined' ? window.location.hostname : '';
+
+  const handleCopyDomain = async () => {
+    if (!currentHostname || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(currentHostname);
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2500);
+    } catch {
+      // Clipboard API unavailable
+    }
   };
 
   return (
@@ -63,8 +80,48 @@ export const LoginView: React.FC<LoginViewProps> = ({
               </div>
 
               {authError && (
-                <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-2.5 text-xs font-medium text-rose-700">
-                  {authError}
+                <div className="rounded-xl bg-rose-50 border border-rose-200 px-3.5 py-3 text-xs font-medium text-rose-800 space-y-2.5">
+                  <p className="leading-relaxed break-words">{authError}</p>
+                  {isUnauthorizedDomain && currentHostname && (
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyDomain()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-rose-200 px-2.5 py-1.5 text-[11px] font-semibold text-rose-900 hover:bg-rose-100/60 cursor-pointer"
+                      >
+                        {copiedDomain ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            Domain Tersalin
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            Salin Domain Ini
+                          </>
+                        )}
+                      </button>
+                      <a
+                        href="https://console.firebase.google.com/project/mesmerizing-amp-2n96h/authentication/settings"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-800"
+                      >
+                        Buka Firebase Console
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+                  {showRedirectFallback && (
+                    <button
+                      type="button"
+                      disabled={isSigningIn}
+                      onClick={() => void handleLoginClick(signingTarget || 'mobile', true)}
+                      className="inline-flex items-center gap-1.5 font-bold underline text-rose-800 hover:text-rose-950 cursor-pointer"
+                    >
+                      Coba Login via Redirect Halaman
+                    </button>
+                  )}
                 </div>
               )}
 

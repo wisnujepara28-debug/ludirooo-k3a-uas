@@ -147,48 +147,48 @@ service cloud.firestore {
     }
 
     match /admins/{adminId} {
-      allow get: if isValidId(adminId) && (isAdmin() || (isVerifiedUser() && request.auth.uid == adminId));
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(adminId) && (isAdmin() || (isSignedIn() && request.auth.uid == adminId));
+      allow list: if isSignedIn();
       allow create: if isValidId(adminId) && isAdmin() && isValidAdminUser(incoming()) && incoming().uid == adminId && incoming().createdAt == request.time;
       allow update: if isValidId(adminId) && isAdmin() && isValidAdminUser(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
       allow delete: if isValidId(adminId) && isAdmin();
     }
 
     match /positions/{positionId} {
-      allow get: if isValidId(positionId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(positionId) && isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isValidId(positionId) && isVerifiedUser() && isValidPosition(incoming()) && incoming().id == positionId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
       allow update: if isValidId(positionId) && isVerifiedUser() && isValidPosition(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
       allow delete: if isValidId(positionId) && isVerifiedUser();
     }
 
     match /workSchedules/{scheduleId} {
-      allow get: if isValidId(scheduleId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(scheduleId) && isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isValidId(scheduleId) && isVerifiedUser() && isValidWorkSchedule(incoming()) && incoming().id == scheduleId && incoming().updatedAt == request.time;
       allow update: if isValidId(scheduleId) && isVerifiedUser() && isValidWorkSchedule(incoming()) && incoming().id == existing().id && incoming().updatedAt == request.time;
       allow delete: if isValidId(scheduleId) && isVerifiedUser();
     }
 
     match /employees/{employeeId} {
-      allow get: if isValidId(employeeId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(employeeId) && isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isValidId(employeeId) && isVerifiedUser() && isValidEmployee(incoming()) && incoming().id == employeeId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
       allow update: if isValidId(employeeId) && isVerifiedUser() && isValidEmployee(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
       allow delete: if isValidId(employeeId) && isVerifiedUser();
     }
 
     match /attendance/{attendanceId} {
-      allow get: if isValidId(attendanceId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(attendanceId) && isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isValidId(attendanceId) && isVerifiedUser() && isValidAttendance(incoming()) && incoming().id == attendanceId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
       allow update: if isValidId(attendanceId) && isVerifiedUser() && isValidAttendance(incoming()) && incoming().id == existing().id && incoming().employeeId == existing().employeeId && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
       allow delete: if isValidId(attendanceId) && isVerifiedUser();
     }
 
     match /payrolls/{payrollId} {
-      allow get: if isValidId(payrollId) && isVerifiedUser();
-      allow list: if isVerifiedUser();
+      allow get: if isValidId(payrollId) && isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isValidId(payrollId) && isVerifiedUser() && isValidPayroll(incoming()) && incoming().id == payrollId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
       allow update: if isValidId(payrollId) && isVerifiedUser() && isValidPayroll(incoming()) && incoming().id == existing().id && incoming().employeeId == existing().employeeId && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
       allow delete: if isValidId(payrollId) && isVerifiedUser();

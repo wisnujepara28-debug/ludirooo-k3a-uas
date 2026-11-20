@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import { collection, doc, onSnapshot } from 'firebase/firestore';
 import {
   auth,
   db,
+  formatFirestoreError,
   googleProvider,
-  handleFirestoreError,
   OperationType,
+  testConnection,
 } from './firebase';
 import {
   DEFAULT_EMPLOYEE_AVATAR,
@@ -41,6 +49,43 @@ const DEFAULT_SCHEDULE: WorkSchedule = {
 
 const WORKSPACE_STORAGE_KEY = 'nusahr_workspace';
 
+function mapAuthError(err: unknown): { message: string; canFallbackRedirect: boolean } {
+  const code = (err as { code?: string })?.code || '';
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
+    return {
+      message: 'Popup Google diblokir peramban. Silakan izinkan popup atau gunakan tombol Login Alternatif di bawah.',
+      canFallbackRedirect: true,
+    };
+  }
+  if (code === 'auth/unauthorized-domain' || msg.includes('unauthorized-domain')) {
+    return {
+      message: `Domain "${window.location.hostname}" belum terdaftar di Authorized Domains Firebase Auth (Project: mesmerizing-amp-2n96h). Silakan tambahkan domain ini di Firebase Console → Authentication → Settings → Authorized domains.`,
+      canFallbackRedirect: false,
+    };
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return {
+      message: 'Provider Google Sign-In belum diaktifkan di Firebase Console.',
+      canFallbackRedirect: false,
+    };
+  }
+  if (code === 'auth/network-request-failed') {
+    return {
+      message: 'Koneksi jaringan ke server Firebase terputus. Periksa internet Anda dan coba lagi.',
+      canFallbackRedirect: false,
+    };
+  }
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return { message: '', canFallbackRedirect: false };
+  }
+  return {
+    message: msg || 'Gagal melakukan autentikasi dengan Google.',
+    canFallbackRedirect: true,
+  };
+}
+
 function AppContent() {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -52,7 +97,10 @@ function AppContent() {
     return 'mobile';
   });
   const [authError, setAuthError] = useState('');
+  const [showRedirectFallback, setShowRedirectFallback] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
+  const [retryCounter, setRetryCounter] = useState(0);
 
   // Firestore synced state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -76,10 +124,16 @@ function AppContent() {
   };
 
   useEffect(() => {
+    getRedirectResult(auth).catch((err) => {
+      const mapped = mapAuthError(err);
+      if (mapped.message) setAuthError(mapped.message);
+    });
+
     const unsub = onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setPositionsLoaded(false);
       setEmployeesLoaded(false);
+      setFirebaseError(null);
       attInitializedRef.current = false;
       if (!nextUser) {
         autoProvisionedUidRef.current = null;
@@ -88,6 +142,8 @@ function AppContent() {
         setAttendances([]);
         setPayrolls([]);
         setAdmins([]);
+      } else {
+        void testConnection();
       }
       setAuthReady(true);
     });
@@ -98,14 +154,22 @@ function AppContent() {
   // Seed initial master data on first sign-in if database is empty
   useEffect(() => {
     if (!authReady || !user || !user.emailVerified) return;
-    void ensureInitialMasterData(user.email, user.uid, user.displayName);
-  }, [authReady, user]);
+    ensureInitialMasterData().catch((err) => {
+      setFirebaseError(err instanceof Error ? err.message : String(err));
+    });
+  }, [authReady, user, retryCounter]);
 
-  // Real-time Firestore subscriptions (single source of truth across all connected users)
+  // Real-time Firestore subscriptions
   useEffect(() => {
-    if (!authReady || !user || !user.emailVerified) {
+    if (!authReady || !user) {
       return;
     }
+
+    const reportSnapshotError = (err: unknown, op: OperationType, path: string) => {
+      const info = formatFirestoreError(err, op, path);
+      console.error('Firestore Error: ', JSON.stringify(info));
+      setFirebaseError(`Koneksi database gagal (${info.operationType} ${info.path}): ${info.error}`);
+    };
 
     const unsubscribers: Array<() => void> = [];
 
@@ -116,7 +180,7 @@ function AppContent() {
           setPositions(snap.docs.map((d) => d.data() as Position));
           setPositionsLoaded(true);
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'positions')
+        (err) => reportSnapshotError(err, OperationType.LIST, 'positions')
       )
     );
 
@@ -128,7 +192,7 @@ function AppContent() {
             setSchedule(snap.data() as WorkSchedule);
           }
         },
-        (err) => handleFirestoreError(err, OperationType.GET, 'workSchedules/default')
+        (err) => reportSnapshotError(err, OperationType.GET, 'workSchedules/default')
       )
     );
 
@@ -139,7 +203,7 @@ function AppContent() {
           setEmployees(snap.docs.map((d) => d.data() as Employee));
           setEmployeesLoaded(true);
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'employees')
+        (err) => reportSnapshotError(err, OperationType.LIST, 'employees')
       )
     );
 
@@ -159,7 +223,7 @@ function AppContent() {
           attInitializedRef.current = true;
           setAttendances(snap.docs.map((d) => d.data() as AttendanceRecord));
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'attendance')
+        (err) => reportSnapshotError(err, OperationType.LIST, 'attendance')
       )
     );
 
@@ -169,7 +233,7 @@ function AppContent() {
         (snap) => {
           setPayrolls(snap.docs.map((d) => d.data() as PayrollRecord));
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'payrolls')
+        (err) => reportSnapshotError(err, OperationType.LIST, 'payrolls')
       )
     );
 
@@ -179,14 +243,14 @@ function AppContent() {
         (snap) => {
           setAdmins(snap.docs.map((d) => d.data() as AdminUser));
         },
-        (err) => handleFirestoreError(err, OperationType.LIST, 'admins')
+        (err) => reportSnapshotError(err, OperationType.LIST, 'admins')
       )
     );
 
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [authReady, user]);
+  }, [authReady, user, retryCounter]);
 
   const myEmployee = useMemo(() => {
     if (!user || !user.email) return null;
@@ -198,13 +262,15 @@ function AppContent() {
 
   // Automatically create an employee profile if signed-in user doesn't have one yet
   useEffect(() => {
-    if (!user || !user.email || !positionsLoaded || !employeesLoaded) return;
+    if (!user || !user.email || !user.emailVerified || !positionsLoaded || !employeesLoaded) return;
     if (myEmployee) {
       if (myEmployee.authUid !== user.uid) {
-        void updateEmployeeSelfProfile(myEmployee.id, {
+        updateEmployeeSelfProfile(myEmployee.id, {
           phone: myEmployee.phone || '-',
           avatarUrl: myEmployee.avatarUrl || user.photoURL || DEFAULT_EMPLOYEE_AVATAR,
           authUid: user.uid,
+        }).catch((err) => {
+          console.error('Auto-bind employee authUid failed:', err);
         });
       }
       return;
@@ -213,12 +279,15 @@ function AppContent() {
     if (autoProvisionedUidRef.current === user.uid) return;
     autoProvisionedUidRef.current = user.uid;
 
-    void ensureEmployeeProfileForUser({
+    ensureEmployeeProfileForUser({
       uid: user.uid,
       email: user.email,
       displayName: user.displayName,
       photoURL: user.photoURL,
       positions,
+    }).catch((err) => {
+      autoProvisionedUidRef.current = null;
+      setFirebaseError(err instanceof Error ? err.message : String(err));
     });
   }, [user, positionsLoaded, employeesLoaded, myEmployee, positions]);
 
@@ -239,19 +308,21 @@ function AppContent() {
     return payrolls.filter((p) => p.employeeId === myEmployee.id);
   }, [payrolls, myEmployee]);
 
-  const handleGoogleLogin = async (targetWorkspace: AppWorkspace) => {
+  const handleGoogleLogin = async (targetWorkspace: AppWorkspace, useRedirect = false) => {
     setAuthError('');
+    setShowRedirectFallback(false);
     switchWorkspace(targetWorkspace);
     setIsSigningIn(true);
     try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Gagal masuk dengan Google.';
-      if (message.includes('popup-blocked')) {
-        setAuthError('Popup login diblokir oleh peramban. Izinkan popup untuk situs ini lalu coba lagi.');
-      } else if (!message.includes('popup-closed-by-user')) {
-        setAuthError(message);
+      if (useRedirect) {
+        await signInWithRedirect(auth, googleProvider);
+      } else {
+        await signInWithPopup(auth, googleProvider);
       }
+    } catch (err) {
+      const mapped = mapAuthError(err);
+      if (mapped.message) setAuthError(mapped.message);
+      setShowRedirectFallback(mapped.canFallbackRedirect);
     } finally {
       setIsSigningIn(false);
     }
@@ -260,11 +331,64 @@ function AppContent() {
   const handleLogout = async () => {
     await signOut(auth);
     setAuthError('');
+    setFirebaseError(null);
   };
+
+  if (firebaseError) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 shadow-sm space-y-4">
+          <h2 className="text-lg font-bold text-slate-950">Kendala Koneksi Firebase</h2>
+          <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3.5 break-words leading-relaxed">
+            {firebaseError}
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setFirebaseError(null);
+                setRetryCounter((c) => c + 1);
+              }}
+              className="flex-1 rounded-xl bg-slate-950 text-white py-2.5 text-xs font-semibold hover:bg-slate-800 cursor-pointer"
+            >
+              Coba Sambungkan Ulang
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleLogout()}
+              className="px-4 rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Keluar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && !user.emailVerified) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-6 shadow-sm space-y-4">
+          <h2 className="text-lg font-bold text-slate-950">Email Akun Belum Terverifikasi</h2>
+          <p className="text-sm text-slate-600">
+            Akun {user.email || 'ini'} belum memiliki status verifikasi email dari Google. Silakan gunakan akun Google yang sudah terverifikasi.
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="w-full rounded-xl bg-slate-950 text-white py-2.5 text-sm font-semibold hover:bg-slate-800 cursor-pointer"
+          >
+            Ganti Akun Google
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const dataReady = positionsLoaded && employeesLoaded;
 
-  if (!authReady || (user && user.emailVerified && (!dataReady || (activeWorkspace === 'mobile' && !myEmployee)))) {
+  if (!authReady || (user && (!dataReady || (activeWorkspace === 'mobile' && !myEmployee)))) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="text-center space-y-3">
@@ -284,6 +408,7 @@ function AppContent() {
         <LoginView
           onGoogleLogin={handleGoogleLogin}
           authError={authError}
+          showRedirectFallback={showRedirectFallback}
           isSigningIn={isSigningIn}
         />
       </>

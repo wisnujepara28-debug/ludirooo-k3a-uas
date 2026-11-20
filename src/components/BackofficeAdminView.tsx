@@ -149,10 +149,12 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
   const [newAdminUid, setNewAdminUid] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminName, setNewAdminName] = useState('');
+  const [toastIsError, setToastIsError] = useState(false);
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, isError = false) => {
+    setToastIsError(isError);
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(''), 3500);
+    setTimeout(() => setToastMsg(''), 4000);
   };
 
   const todayKey = getDateKey(new Date());
@@ -295,29 +297,33 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
     e.preventDefault();
     const pos = positions.find((p) => p.id === empForm.positionId) || positions[0];
     if (!pos) {
-      showToast('Buat master jabatan terlebih dahulu.');
+      showToast('Buat master jabatan terlebih dahulu.', true);
       return;
     }
 
-    await saveEmployee({
-      id: editingEmp?.id,
-      nik: empForm.nik,
-      name: empForm.name,
-      email: empForm.email,
-      phone: empForm.phone || '-',
-      positionId: pos.id,
-      positionTitle: pos.title,
-      department: pos.department,
-      dailyRate: Number(empForm.dailyRate) || pos.dailyRate,
-      dailyAllowance: Number(empForm.dailyAllowance) || pos.dailyAllowance,
-      status: empForm.status,
-      authUid: editingEmp?.authUid || '',
-      avatarUrl: editingEmp?.avatarUrl || DEFAULT_EMPLOYEE_AVATAR,
-      joinDate: empForm.joinDate || formatDateDDMMMYYYY(new Date()),
-    });
+    try {
+      await saveEmployee({
+        id: editingEmp?.id,
+        nik: empForm.nik,
+        name: empForm.name,
+        email: empForm.email,
+        phone: empForm.phone || '-',
+        positionId: pos.id,
+        positionTitle: pos.title,
+        department: pos.department,
+        dailyRate: Number(empForm.dailyRate) || pos.dailyRate,
+        dailyAllowance: Number(empForm.dailyAllowance) || pos.dailyAllowance,
+        status: empForm.status,
+        authUid: editingEmp?.authUid || '',
+        avatarUrl: editingEmp?.avatarUrl || DEFAULT_EMPLOYEE_AVATAR,
+        joinDate: empForm.joinDate || formatDateDDMMMYYYY(new Date()),
+      });
 
-    setShowEmpModal(false);
-    showToast(editingEmp ? 'Data karyawan berhasil diperbarui.' : 'Karyawan baru berhasil ditambahkan.');
+      setShowEmpModal(false);
+      showToast(editingEmp ? 'Data karyawan berhasil diperbarui.' : 'Karyawan baru berhasil ditambahkan.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menyimpan karyawan.', true);
+    }
   };
 
   const openCreatePosition = () => {
@@ -339,12 +345,16 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
 
   const handleSavePosition = async (e: React.FormEvent) => {
     e.preventDefault();
-    await savePosition({
-      id: editingPos?.id,
-      ...posForm,
-    });
-    setShowPosModal(false);
-    showToast(editingPos ? 'Jabatan berhasil diperbarui.' : 'Jabatan baru berhasil disimpan.');
+    try {
+      await savePosition({
+        id: editingPos?.id,
+        ...posForm,
+      });
+      setShowPosModal(false);
+      showToast(editingPos ? 'Jabatan berhasil diperbarui.' : 'Jabatan baru berhasil disimpan.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menyimpan jabatan.', true);
+    }
   };
 
   const handleToggleDay = (day: string) => {
@@ -363,6 +373,8 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
     try {
       await saveWorkSchedule(schedDraft);
       showToast('Pengaturan hari dan jam kerja berhasil disimpan.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal menyimpan jadwal kerja.', true);
     } finally {
       setIsSavingSchedule(false);
     }
@@ -389,6 +401,8 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
           ? `Gaji ${row.employee.name} (${formatPeriodLabel(payrollPeriod)}) ditandai Dibayarkan.`
           : `Draft payroll ${row.employee.name} disimpan.`
       );
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal memproses payroll.', true);
     } finally {
       setProcessingPayrollId(null);
     }
@@ -438,15 +452,19 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAdminUid.trim() || !newAdminEmail.trim()) return;
-    await addAdminUser({
-      uid: newAdminUid.trim(),
-      email: newAdminEmail.trim(),
-      name: newAdminName.trim() || newAdminEmail.trim(),
-    });
-    setNewAdminUid('');
-    setNewAdminEmail('');
-    setNewAdminName('');
-    showToast('Admin baru berhasil ditambahkan.');
+    try {
+      await addAdminUser({
+        uid: newAdminUid.trim(),
+        email: newAdminEmail.trim(),
+        name: newAdminName.trim() || newAdminEmail.trim(),
+      });
+      setNewAdminUid('');
+      setNewAdminEmail('');
+      setNewAdminName('');
+      showToast('Admin baru berhasil ditambahkan.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Hanya Super Admin yang dapat menambah admin.', true);
+    }
   };
 
   const navItems: Array<{
@@ -629,8 +647,12 @@ export const BackofficeAdminView: React.FC<BackofficeAdminViewProps> = ({
         </header>
 
         {toastMsg && (
-          <div className="fixed bottom-5 right-5 z-50 rounded-xl bg-slate-950 text-white px-4 py-3 text-xs font-semibold shadow-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div
+            className={`fixed bottom-5 right-5 z-50 rounded-xl px-4 py-3 text-xs font-semibold shadow-xl flex items-center gap-2 ${
+              toastIsError ? 'bg-rose-600 text-white' : 'bg-slate-950 text-white'
+            }`}
+          >
+            <CheckCircle2 className={`w-4 h-4 shrink-0 ${toastIsError ? 'text-white' : 'text-emerald-400'}`} />
             <span>{toastMsg}</span>
           </div>
         )}

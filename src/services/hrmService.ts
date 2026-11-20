@@ -63,11 +63,7 @@ const SEEDED_POSITIONS: Array<Omit<Position, 'createdAt' | 'updatedAt'>> = [
   },
 ];
 
-export async function ensureInitialMasterData(
-  currentUserEmail?: string | null,
-  currentUserUid?: string | null,
-  currentUserName?: string | null
-) {
+export async function ensureInitialMasterData() {
   try {
     const posSnap = await getDocs(collection(db, 'positions'));
     if (posSnap.empty) {
@@ -173,18 +169,21 @@ export async function ensureEmployeeProfileForUser(params: {
 
   const empId = `emp-${slugifyId(params.uid).slice(0, 24)}`;
   const nikSuffix = params.uid.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() || '1001';
+  const rawName = (params.displayName || params.email.split('@')[0] || 'Karyawan NusaHR').trim();
+  const safeName = rawName.length >= 2 ? sanitizeText(rawName, BLUEPRINT_LIMITS.NAME_MAX) : 'Karyawan NusaHR';
+  const safeEmail = sanitizeText(params.email.toLowerCase(), BLUEPRINT_LIMITS.EMAIL_MAX);
 
   const payload = {
     id: empId,
     nik: `EMP-${nikSuffix}`,
-    name: sanitizeText(params.displayName || params.email.split('@')[0] || 'Karyawan NusaHR', BLUEPRINT_LIMITS.NAME_MAX),
-    email: sanitizeText(params.email.toLowerCase(), BLUEPRINT_LIMITS.EMAIL_MAX),
+    name: safeName,
+    email: safeEmail.length >= 5 ? safeEmail : `${params.uid.slice(0, 6)}@nusahr.id`,
     phone: '-',
     positionId: defaultPos.id,
     positionTitle: sanitizeText(defaultPos.title, BLUEPRINT_LIMITS.TITLE_MAX),
     department: sanitizeText(defaultPos.department, BLUEPRINT_LIMITS.DEPT_MAX),
-    dailyRate: defaultPos.dailyRate,
-    dailyAllowance: defaultPos.dailyAllowance,
+    dailyRate: Math.max(0, Math.round(defaultPos.dailyRate)),
+    dailyAllowance: Math.max(0, Math.round(defaultPos.dailyAllowance)),
     status: 'Aktif' as const,
     authUid: params.uid,
     avatarUrl: sanitizeText(params.photoURL || DEFAULT_EMPLOYEE_AVATAR, 500),
@@ -208,10 +207,16 @@ export async function savePosition(
     ? input.id
     : `pos-${slugifyId(input.title)}-${Date.now().toString().slice(-4)}`;
 
+  const cleanTitle = sanitizeText(input.title, BLUEPRINT_LIMITS.TITLE_MAX);
+  const cleanDept = sanitizeText(input.department, BLUEPRINT_LIMITS.DEPT_MAX);
+  if (cleanTitle.length < 2 || cleanDept.length < 2) {
+    throw new Error('Nama jabatan dan departemen minimal 2 karakter.');
+  }
+
   const payload = {
     id,
-    title: sanitizeText(input.title, BLUEPRINT_LIMITS.TITLE_MAX),
-    department: sanitizeText(input.department, BLUEPRINT_LIMITS.DEPT_MAX),
+    title: cleanTitle,
+    department: cleanDept,
     dailyRate: Math.max(0, Math.round(Number(input.dailyRate) || 0)),
     dailyAllowance: Math.max(0, Math.round(Number(input.dailyAllowance) || 0)),
     updatedAt: serverTimestamp(),
@@ -241,10 +246,14 @@ export async function deletePosition(positionId: string) {
 
 export async function saveWorkSchedule(schedule: Omit<WorkSchedule, 'updatedAt'>) {
   const id = schedule.id || 'default';
+  const cleanName = sanitizeText(schedule.name, BLUEPRINT_LIMITS.TITLE_MAX);
+  if (cleanName.length < 2) {
+    throw new Error('Nama shift kerja minimal 2 karakter.');
+  }
   try {
     await setDoc(doc(db, 'workSchedules', id), {
       id,
-      name: sanitizeText(schedule.name, BLUEPRINT_LIMITS.TITLE_MAX),
+      name: cleanName,
       startTime: schedule.startTime,
       endTime: schedule.endTime,
       lateToleranceMinutes: Math.max(0, Math.min(180, Math.round(Number(schedule.lateToleranceMinutes) || 0))),
@@ -263,12 +272,19 @@ export async function saveEmployee(
     ? input.id
     : `emp-${slugifyId(input.nik || input.name)}-${Date.now().toString().slice(-4)}`;
 
+  const cleanNik = sanitizeText(input.nik, BLUEPRINT_LIMITS.NIK_MAX);
+  const cleanName = sanitizeText(input.name, BLUEPRINT_LIMITS.NAME_MAX);
+  const cleanEmail = sanitizeText(input.email.toLowerCase(), BLUEPRINT_LIMITS.EMAIL_MAX);
+  if (cleanNik.length < 2 || cleanName.length < 2 || cleanEmail.length < 5) {
+    throw new Error('NIK, Nama lengkap, dan Email valid wajib diisi.');
+  }
+
   const payload = {
     id,
-    nik: sanitizeText(input.nik, BLUEPRINT_LIMITS.NIK_MAX),
-    name: sanitizeText(input.name, BLUEPRINT_LIMITS.NAME_MAX),
-    email: sanitizeText(input.email.toLowerCase(), BLUEPRINT_LIMITS.EMAIL_MAX),
-    phone: sanitizeText(input.phone, BLUEPRINT_LIMITS.PHONE_MAX),
+    nik: cleanNik,
+    name: cleanName,
+    email: cleanEmail,
+    phone: sanitizeText(input.phone || '-', BLUEPRINT_LIMITS.PHONE_MAX),
     positionId: input.positionId,
     positionTitle: sanitizeText(input.positionTitle, BLUEPRINT_LIMITS.TITLE_MAX),
     department: sanitizeText(input.department, BLUEPRINT_LIMITS.DEPT_MAX),
