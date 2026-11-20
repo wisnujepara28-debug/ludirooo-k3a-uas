@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "Position": {
+      "title": "Position",
+      "description": "Master data jabatan dan tarif gaji harian karyawan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "department": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "dailyRate": { "type": "number" },
+        "dailyAllowance": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "department", "dailyRate", "dailyAllowance", "createdAt", "updatedAt"]
+    },
+    "WorkSchedule": {
+      "title": "WorkSchedule",
+      "description": "Konfigurasi hari kerja aktif, jam masuk, jam pulang, dan toleransi keterlambatan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "startTime": { "type": "string", "minLength": 5, "maxLength": 5, "pattern": "^\\d{2}:\\d{2}$" },
+        "endTime": { "type": "string", "minLength": 5, "maxLength": 5, "pattern": "^\\d{2}:\\d{2}$" },
+        "lateToleranceMinutes": { "type": "number" },
+        "activeDays": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "startTime", "endTime", "lateToleranceMinutes", "activeDays", "updatedAt"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Data profil karyawan, jabatan, email login, dan tarif gaji harian.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nik": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "email": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "positionId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "positionTitle": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "department": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "dailyRate": { "type": "number" },
+        "dailyAllowance": { "type": "number" },
+        "status": { "type": "string", "enum": ["Aktif", "Nonaktif"] },
+        "authUid": { "type": "string", "maxLength": 128 },
+        "avatarUrl": { "type": "string", "maxLength": 500 },
+        "joinDate": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nik", "name", "email", "phone", "positionId", "positionTitle", "department", "dailyRate", "dailyAllowance", "status", "authUid", "avatarUrl", "joinDate", "createdAt", "updatedAt"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Catatan kehadiran harian dengan foto selfie Clock-In dan Clock-Out.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "employeeId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "employeeNik": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "employeeName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "positionTitle": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "authUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "employeeEmail": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "dateKey": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "dateFormatted": { "type": "string", "minLength": 8, "maxLength": 20 },
+        "clockInTime": { "type": "string", "minLength": 5, "maxLength": 10 },
+        "clockInPhoto": { "type": "string", "minLength": 10, "maxLength": 250000 },
+        "clockInStatus": { "type": "string", "enum": ["Tepat Waktu", "Terlambat"] },
+        "clockOutTime": { "type": "string", "maxLength": 10 },
+        "clockOutPhoto": { "type": "string", "maxLength": 250000 },
+        "hasClockOut": { "type": "boolean" },
+        "workMinutes": { "type": "number" },
+        "dailyRateSnapshot": { "type": "number" },
+        "dailyAllowanceSnapshot": { "type": "number" },
+        "verificationStatus": { "type": "string", "enum": ["Tercatat", "Terverifikasi", "Ditolak"] },
+        "notes": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "employeeId", "employeeNik", "employeeName", "positionTitle", "authUid", "employeeEmail", "dateKey", "dateFormatted", "clockInTime", "clockInPhoto", "clockInStatus", "clockOutTime", "clockOutPhoto", "hasClockOut", "workMinutes", "dailyRateSnapshot", "dailyAllowanceSnapshot", "verificationStatus", "notes", "createdAt", "updatedAt"]
+    },
+    "Payroll": {
+      "title": "Payroll",
+      "description": "Rekapitulasi dan pembayaran gaji harian karyawan per periode bulanan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "employeeId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "employeeNik": { "type": "string", "minLength": 2, "maxLength": 30 },
+        "employeeName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "employeeEmail": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "positionTitle": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "periodKey": { "type": "string", "minLength": 7, "maxLength": 7, "pattern": "^\\d{4}-\\d{2}$" },
+        "periodLabel": { "type": "string", "minLength": 3, "maxLength": 30 },
+        "daysPresent": { "type": "number" },
+        "dailyRate": { "type": "number" },
+        "dailyAllowance": { "type": "number" },
+        "basePayTotal": { "type": "number" },
+        "allowanceTotal": { "type": "number" },
+        "deductionTotal": { "type": "number" },
+        "netPay": { "type": "number" },
+        "status": { "type": "string", "enum": ["Draft", "Dibayarkan"] },
+        "paidDateFormatted": { "type": "string", "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "employeeId", "employeeNik", "employeeName", "employeeEmail", "positionTitle", "periodKey", "periodLabel", "daysPresent", "dailyRate", "dailyAllowance", "basePayTotal", "allowanceTotal", "deductionTotal", "netPay", "status", "paidDateFormatted", "createdAt", "updatedAt"]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Daftar pengguna yang memiliki hak akses penuh ke panel backoffice manajemen.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "minLength": 5, "maxLength": 120 },
+        "name": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/positions/{positionId}": {
+      "schema": { "$ref": "#/entities/Position" },
+      "description": "Koleksi master jabatan beserta tarif gaji harian."
+    },
+    "/workSchedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/WorkSchedule" },
+      "description": "Koleksi pengaturan hari kerja aktif dan jam masuk/pulang."
+    },
+    "/employees/{employeeId}": {
+      "schema": { "$ref": "#/entities/Employee" },
+      "description": "Koleksi data induk karyawan beserta jabatan dan tarif harian."
+    },
+    "/attendance/{attendanceId}": {
+      "schema": { "$ref": "#/entities/Attendance" },
+      "description": "Koleksi log presensi masuk/pulang dengan foto selfie verifikasi."
+    },
+    "/payrolls/{payrollId}": {
+      "schema": { "$ref": "#/entities/Payroll" },
+      "description": "Koleksi slip gaji dan status pembayaran payroll harian."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Koleksi akun administrator backoffice."
+    }
+  }
+}

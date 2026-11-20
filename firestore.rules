@@ -1,0 +1,197 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'wisnujepara28@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidPosition(data) {
+      return data.keys().hasAll(['id', 'title', 'department', 'dailyRate', 'dailyAllowance', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'department', 'dailyRate', 'dailyAllowance', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 80 &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 60 &&
+        data.dailyRate is number && data.dailyRate >= 0 && data.dailyRate <= 100000000 &&
+        data.dailyAllowance is number && data.dailyAllowance >= 0 && data.dailyAllowance <= 50000000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWorkSchedule(data) {
+      return data.keys().hasAll(['id', 'name', 'startTime', 'endTime', 'lateToleranceMinutes', 'activeDays', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'name', 'startTime', 'endTime', 'lateToleranceMinutes', 'activeDays', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 80 &&
+        data.startTime is string && data.startTime.size() == 5 && data.startTime.matches('^\\d{2}:\\d{2}$') &&
+        data.endTime is string && data.endTime.size() == 5 && data.endTime.matches('^\\d{2}:\\d{2}$') &&
+        data.lateToleranceMinutes is number && data.lateToleranceMinutes >= 0 && data.lateToleranceMinutes <= 180 &&
+        data.activeDays is list && data.activeDays.size() <= 7 &&
+        (data.activeDays.size() == 0 || data.activeDays[0] is string) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidEmployee(data) {
+      return data.keys().hasAll(['id', 'nik', 'name', 'email', 'phone', 'positionId', 'positionTitle', 'department', 'dailyRate', 'dailyAllowance', 'status', 'authUid', 'avatarUrl', 'joinDate', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'nik', 'name', 'email', 'phone', 'positionId', 'positionTitle', 'department', 'dailyRate', 'dailyAllowance', 'status', 'authUid', 'avatarUrl', 'joinDate', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        data.nik is string && data.nik.size() >= 2 && data.nik.size() <= 30 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+        data.phone is string && data.phone.size() <= 30 &&
+        isValidId(data.positionId) &&
+        data.positionTitle is string && data.positionTitle.size() >= 2 && data.positionTitle.size() <= 80 &&
+        data.department is string && data.department.size() >= 2 && data.department.size() <= 60 &&
+        data.dailyRate is number && data.dailyRate >= 0 && data.dailyRate <= 100000000 &&
+        data.dailyAllowance is number && data.dailyAllowance >= 0 && data.dailyAllowance <= 50000000 &&
+        (data.status == 'Aktif' || data.status == 'Nonaktif') &&
+        data.authUid is string && data.authUid.size() <= 128 &&
+        data.avatarUrl is string && data.avatarUrl.size() <= 500 &&
+        data.joinDate is string && data.joinDate.size() >= 8 && data.joinDate.size() <= 20 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['id', 'employeeId', 'employeeNik', 'employeeName', 'positionTitle', 'authUid', 'employeeEmail', 'dateKey', 'dateFormatted', 'clockInTime', 'clockInPhoto', 'clockInStatus', 'clockOutTime', 'clockOutPhoto', 'hasClockOut', 'workMinutes', 'dailyRateSnapshot', 'dailyAllowanceSnapshot', 'verificationStatus', 'notes', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'employeeId', 'employeeNik', 'employeeName', 'positionTitle', 'authUid', 'employeeEmail', 'dateKey', 'dateFormatted', 'clockInTime', 'clockInPhoto', 'clockInStatus', 'clockOutTime', 'clockOutPhoto', 'hasClockOut', 'workMinutes', 'dailyRateSnapshot', 'dailyAllowanceSnapshot', 'verificationStatus', 'notes', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.employeeId) &&
+        data.employeeNik is string && data.employeeNik.size() >= 2 && data.employeeNik.size() <= 30 &&
+        data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100 &&
+        data.positionTitle is string && data.positionTitle.size() >= 2 && data.positionTitle.size() <= 80 &&
+        data.authUid is string && data.authUid.size() >= 1 && data.authUid.size() <= 128 &&
+        data.employeeEmail is string && data.employeeEmail.size() >= 5 && data.employeeEmail.size() <= 120 &&
+        data.dateKey is string && data.dateKey.size() == 10 && data.dateKey.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+        data.dateFormatted is string && data.dateFormatted.size() >= 8 && data.dateFormatted.size() <= 20 &&
+        data.clockInTime is string && data.clockInTime.size() >= 4 && data.clockInTime.size() <= 10 &&
+        data.clockInPhoto is string && data.clockInPhoto.size() >= 10 && data.clockInPhoto.size() <= 250000 &&
+        (data.clockInStatus == 'Tepat Waktu' || data.clockInStatus == 'Terlambat') &&
+        data.clockOutTime is string && data.clockOutTime.size() <= 10 &&
+        data.clockOutPhoto is string && data.clockOutPhoto.size() <= 250000 &&
+        data.hasClockOut is bool &&
+        data.workMinutes is number && data.workMinutes >= 0 && data.workMinutes <= 1440 &&
+        data.dailyRateSnapshot is number && data.dailyRateSnapshot >= 0 && data.dailyRateSnapshot <= 100000000 &&
+        data.dailyAllowanceSnapshot is number && data.dailyAllowanceSnapshot >= 0 && data.dailyAllowanceSnapshot <= 50000000 &&
+        (data.verificationStatus == 'Tercatat' || data.verificationStatus == 'Terverifikasi' || data.verificationStatus == 'Ditolak') &&
+        data.notes is string && data.notes.size() <= 300 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPayroll(data) {
+      return data.keys().hasAll(['id', 'employeeId', 'employeeNik', 'employeeName', 'employeeEmail', 'positionTitle', 'periodKey', 'periodLabel', 'daysPresent', 'dailyRate', 'dailyAllowance', 'basePayTotal', 'allowanceTotal', 'deductionTotal', 'netPay', 'status', 'paidDateFormatted', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'employeeId', 'employeeNik', 'employeeName', 'employeeEmail', 'positionTitle', 'periodKey', 'periodLabel', 'daysPresent', 'dailyRate', 'dailyAllowance', 'basePayTotal', 'allowanceTotal', 'deductionTotal', 'netPay', 'status', 'paidDateFormatted', 'createdAt', 'updatedAt']) &&
+        isValidId(data.id) &&
+        isValidId(data.employeeId) &&
+        data.employeeNik is string && data.employeeNik.size() >= 2 && data.employeeNik.size() <= 30 &&
+        data.employeeName is string && data.employeeName.size() >= 2 && data.employeeName.size() <= 100 &&
+        data.employeeEmail is string && data.employeeEmail.size() >= 5 && data.employeeEmail.size() <= 120 &&
+        data.positionTitle is string && data.positionTitle.size() >= 2 && data.positionTitle.size() <= 80 &&
+        data.periodKey is string && data.periodKey.size() == 7 && data.periodKey.matches('^\\d{4}-\\d{2}$') &&
+        data.periodLabel is string && data.periodLabel.size() >= 3 && data.periodLabel.size() <= 30 &&
+        data.daysPresent is number && data.daysPresent >= 0 && data.daysPresent <= 31 &&
+        data.dailyRate is number && data.dailyRate >= 0 && data.dailyRate <= 100000000 &&
+        data.dailyAllowance is number && data.dailyAllowance >= 0 && data.dailyAllowance <= 50000000 &&
+        data.basePayTotal is number && data.basePayTotal >= 0 &&
+        data.allowanceTotal is number && data.allowanceTotal >= 0 &&
+        data.deductionTotal is number && data.deductionTotal >= 0 &&
+        data.netPay is number && data.netPay >= 0 &&
+        (data.status == 'Draft' || data.status == 'Dibayarkan') &&
+        data.paidDateFormatted is string && data.paidDateFormatted.size() <= 20 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAdminUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'name', 'createdAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'name', 'createdAt']) &&
+        isValidId(data.uid) &&
+        data.email is string && data.email.size() >= 5 && data.email.size() <= 120 &&
+        data.name is string && data.name.size() >= 2 && data.name.size() <= 100 &&
+        data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+    match /test/{docId} {
+      allow get: if isSignedIn();
+    }
+
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isAdmin() || (isVerifiedUser() && request.auth.uid == adminId));
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(adminId) && isAdmin() && isValidAdminUser(incoming()) && incoming().uid == adminId && incoming().createdAt == request.time;
+      allow update: if isValidId(adminId) && isAdmin() && isValidAdminUser(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(adminId) && isAdmin();
+    }
+
+    match /positions/{positionId} {
+      allow get: if isValidId(positionId) && isVerifiedUser();
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(positionId) && isVerifiedUser() && isValidPosition(incoming()) && incoming().id == positionId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(positionId) && isVerifiedUser() && isValidPosition(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(positionId) && isVerifiedUser();
+    }
+
+    match /workSchedules/{scheduleId} {
+      allow get: if isValidId(scheduleId) && isVerifiedUser();
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(scheduleId) && isVerifiedUser() && isValidWorkSchedule(incoming()) && incoming().id == scheduleId && incoming().updatedAt == request.time;
+      allow update: if isValidId(scheduleId) && isVerifiedUser() && isValidWorkSchedule(incoming()) && incoming().id == existing().id && incoming().updatedAt == request.time;
+      allow delete: if isValidId(scheduleId) && isVerifiedUser();
+    }
+
+    match /employees/{employeeId} {
+      allow get: if isValidId(employeeId) && isVerifiedUser();
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(employeeId) && isVerifiedUser() && isValidEmployee(incoming()) && incoming().id == employeeId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(employeeId) && isVerifiedUser() && isValidEmployee(incoming()) && incoming().id == existing().id && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(employeeId) && isVerifiedUser();
+    }
+
+    match /attendance/{attendanceId} {
+      allow get: if isValidId(attendanceId) && isVerifiedUser();
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(attendanceId) && isVerifiedUser() && isValidAttendance(incoming()) && incoming().id == attendanceId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(attendanceId) && isVerifiedUser() && isValidAttendance(incoming()) && incoming().id == existing().id && incoming().employeeId == existing().employeeId && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(attendanceId) && isVerifiedUser();
+    }
+
+    match /payrolls/{payrollId} {
+      allow get: if isValidId(payrollId) && isVerifiedUser();
+      allow list: if isVerifiedUser();
+      allow create: if isValidId(payrollId) && isVerifiedUser() && isValidPayroll(incoming()) && incoming().id == payrollId && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isValidId(payrollId) && isVerifiedUser() && isValidPayroll(incoming()) && incoming().id == existing().id && incoming().employeeId == existing().employeeId && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time;
+      allow delete: if isValidId(payrollId) && isVerifiedUser();
+    }
+  }
+}
