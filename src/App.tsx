@@ -115,6 +115,15 @@ function AppContent() {
 
   const autoProvisionedUidRef = useRef<string | null>(null);
   const attInitializedRef = useRef(false);
+  const payrollInitializedRef = useRef(false);
+  const scheduleInitializedRef = useRef(false);
+  const liveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerLiveNotice = (message: string) => {
+    setLiveNotice(message);
+    if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    liveTimerRef.current = setTimeout(() => setLiveNotice(''), 4500);
+  };
 
   const switchWorkspace = (ws: AppWorkspace) => {
     setActiveWorkspace(ws);
@@ -135,6 +144,8 @@ function AppContent() {
       setEmployeesLoaded(false);
       setFirebaseError(null);
       attInitializedRef.current = false;
+      payrollInitializedRef.current = false;
+      scheduleInitializedRef.current = false;
       if (!nextUser) {
         autoProvisionedUidRef.current = null;
         setPositions([]);
@@ -148,7 +159,10 @@ function AppContent() {
       setAuthReady(true);
     });
 
-    return () => unsub();
+    return () => {
+      unsub();
+      if (liveTimerRef.current) clearTimeout(liveTimerRef.current);
+    };
   }, []);
 
   // Seed initial master data on first sign-in if database is empty
@@ -189,6 +203,10 @@ function AppContent() {
         doc(db, 'workSchedules', 'default'),
         (snap) => {
           if (snap.exists()) {
+            if (scheduleInitializedRef.current && !snap.metadata.hasPendingWrites) {
+              triggerLiveNotice('Jadwal jam kerja baru saja diperbarui secara langsung.');
+            }
+            scheduleInitializedRef.current = true;
             setSchedule(snap.data() as WorkSchedule);
           }
         },
@@ -216,8 +234,7 @@ function AppContent() {
             if (changes.length > 0) {
               const latest = changes[0].doc.data() as AttendanceRecord;
               const actionText = latest.hasClockOut ? 'Clock Out' : 'Clock In';
-              setLiveNotice(`Pembaruan langsung: ${latest.employeeName} (${actionText} ${latest.dateFormatted})`);
-              setTimeout(() => setLiveNotice(''), 4000);
+              triggerLiveNotice(`Pembaruan langsung: ${latest.employeeName} (${actionText} ${latest.dateFormatted})`);
             }
           }
           attInitializedRef.current = true;
@@ -231,6 +248,14 @@ function AppContent() {
       onSnapshot(
         collection(db, 'payrolls'),
         (snap) => {
+          if (payrollInitializedRef.current) {
+            const changes = snap.docChanges().filter((c) => !c.doc.metadata.hasPendingWrites);
+            if (changes.length > 0) {
+              const latest = changes[0].doc.data() as PayrollRecord;
+              triggerLiveNotice(`Payroll diperbarui: ${latest.employeeName} (${latest.status})`);
+            }
+          }
+          payrollInitializedRef.current = true;
           setPayrolls(snap.docs.map((d) => d.data() as PayrollRecord));
         },
         (err) => reportSnapshotError(err, OperationType.LIST, 'payrolls')
